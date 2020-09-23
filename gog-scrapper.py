@@ -16,16 +16,23 @@ def retry_if_timeout_error(exception):
     return isinstance(exception, TimeoutError)
 
 
-class BrowserContext:
-    browser = webdriver.Chrome()
+def next_price(soup):
+    for price in soup.body.find_all('span', class_="product-state__price"):
+        yield price.text
 
-    def __init__(self, username):
+
+def append_to_json(username, single_site_table):
+    with open(username + "_wishlist.json", "a") as fresult:
+        json.dump(single_site_table, fresult, indent=4)
+
+
+class BrowserActionExecutor:
+    username = ""
+
+    def __init__(self, browser, username):
+        self.browser = browser
         self.browser.set_page_load_timeout(15)
-        try:
-            url = "https://www.gog.com/u/" + username + "/wishlist"
-            self.browser.get(url)
-        except TimeoutError:
-            raise
+        self.username = username
 
     def wishlist_exist(self):
         html = self.browser.page_source
@@ -37,100 +44,88 @@ class BrowserContext:
         self.browser.execute_script("arguments[0].click();", arrow)
 
     @retry(retry_on_exception=retry_if_timeout_error, stop_max_attempt_number=3)
-    def scrolling_down_totally(self, username, tries=3):
+    def scrolling_down_totally(self):
             self.browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
             WebDriverWait(self.browser, 15).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, 'div[class="footer-microservice-secondary__legal"]'))
             )
 
+    def retrieve_single_table(self, soup):
+        records = soup.body.find_all('span', class_="product-title__text")
+        records_dict = {records.pop(0).text: price for price in next_price(soup)}
+        print(records_dict)
+        return records_dict
 
-def next_price(soup):
-    for price in soup.body.find_all('span', class_="product-state__price"):
-        yield price.text
+    def get_soup_from_source(self):
+            html = self.browser.page_source
+            soup = BeautifulSoup(html, "html.parser")
+            return soup
 
+    def handle_more_than_one_page(self, pages_total):
+        css_selector_right_arrow = "span[hook-test='nextListPage']"
+        for i in range(0, pages_total):
+            soup = self.get_soup_from_source()
+            WebDriverWait(self.browser, 15).until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, css_selector_right_arrow))
+            )
+            single_page_table = self.retrieve_single_table(soup)
+            append_to_json(self.username, single_page_table)
+            self.click_right_arrow(css_selector_right_arrow)
+            # ensuring that html after parsing has changed after arrow click
+            while single_page_table == self.retrieve_single_table(soup) and i < pages_total - 1:
+                soup = self.get_soup_from_source()
 
-def retrieve_single_table(soup):
-    records = soup.body.find_all('span', class_="product-title__text")
-    records_dict = {records.pop(0).text: price for price in next_price(soup)}
-    print(records_dict)
-    return records_dict
-
-
-def append_to_json(username, single_site_table):
-    with open(username + "_wishlist.json", "a") as fresult:
-        json.dump(single_site_table, fresult, indent=4)
-
-
-def get_soup_from_source(browserContext):
-        html = browserContext.browser.page_source
-        soup = BeautifulSoup(html, "html.parser")
-        return soup
-
-
-def handle_more_than_one_page(browserContext, pages_total, username):
-    css_selector_right_arrow = "span[hook-test='nextListPage']"
-    for i in range(0, pages_total):
-        soup = get_soup_from_source(browserContext)
-        WebDriverWait(browserContext.browser, 15).until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, css_selector_right_arrow))
-        )
-        single_page_table = retrieve_single_table(soup)
-        append_to_json(username, single_page_table)
-        browserContext.click_right_arrow(css_selector_right_arrow)
-        # ensuring that html after parsing has changed after arrow click
-        while single_page_table == retrieve_single_table(soup) and i < pages_total - 1:
-            soup = get_soup_from_source(browserContext)
-
-
-def retrieve_wishlist(username):
-    with open(username + "_wishlist.json", "w") as fresult:
-        fresult.write("")
-    browserContext = BrowserContext(username)
-    get_soup_from_source(browserContext)
-    if browserContext.wishlist_exist():
-        browserContext.scrolling_down_totally(username)
-        #checking if there is more than one page
-        pages_navi = get_soup_from_source(browserContext).body.find('span', class_="list-navigation__pagin")
-        soup = get_soup_from_source(browserContext)
-        if pages_navi is not None:
-            pages_total = int(soup.body.find_all('span', class_="pagin__total").pop().text)
-            handle_more_than_one_page(browserContext, pages_total, username)
+    def retrieve_wishlist(self):
+        with open(self.username + "_wishlist.json", "w") as fresult:
+            fresult.write("")
+        if self.wishlist_exist():
+            self.scrolling_down_totally()
+            #checking if there is more than one page
+            pages_navi = self.get_soup_from_source().body.find('span', class_="list-navigation__pagin")
+            soup = self.get_soup_from_source()
+            if pages_navi is not None:
+                pages_total = int(soup.body.find_all('span', class_="pagin__total").pop().text)
+                self.handle_more_than_one_page(pages_total)
+            else:
+                single_page_table = self.retrieve_single_table(soup)
+                append_to_json(self.username, single_page_table)
         else:
-            single_page_table = retrieve_single_table(soup)
-            append_to_json(username, single_page_table)
-    else:
-        append_to_json(username, {})  # when wishlist does not exist, make empty json
+            append_to_json(self.username, {})  # when wishlist does not exist, make empty json
 
+    def retrieve_image_url(self):
+        try:
+            request.urlretrieve("https://www.gog.com/u/" + self.username, self.username + '.html')
+        except Exception:
+            print("Username does not exist.")
+            raise
+        with open(self.username + ".html", encoding="utf-8") as html_f:
+            soup_site = BeautifulSoup(html_f, "html.parser")
+            links = []
+            for tag in soup_site.body.find_all('a',  class_="user-status__avatar-link"):
+                links = re.findall(r"https://.*jpg|jpeg|gif|png|tiff|bmp$", str(tag))
+            return links
 
-def retrieve_image_url(username):
-    try:
-        request.urlretrieve("https://www.gog.com/u/" + username, username + '.html')
-    except Exception:
-        print("Username does not exist.")
-        raise
-    with open(username+".html", encoding="utf-8") as html_f:
-
-        soup_site = BeautifulSoup(html_f, "html.parser")
-        links = []
-        for tag in soup_site.body.find_all('a',  class_="user-status__avatar-link"):
-            links = re.findall(r"https://.*jpg|jpeg|gif|png|tiff|bmp$", str(tag))
-        return links
-
-
-def download_avatar(username):
-    links = retrieve_image_url(username)
-    for link in links:
-        request.urlretrieve(link, username + '.jpg') #overriding of the file was intentionally left
-                                                     #easily modifying parameters can lead to downloading small,
-                                                     #big or both images
+    def download_avatar(self):
+        links = self.retrieve_image_url()
+        for link in links:
+            request.urlretrieve(link, self.username + '.jpg') #overriding of the file was intentionally left
+                                                        #easily modifying parameters can lead to downloading small,
+                                                        #big or both images
 
 
 def main():
     if not len(sys.argv) == 2:
         raise ValueError("This script should be executed with exactly one argument.")
     username = sys.argv[1]
-    download_avatar(username)
-    retrieve_wishlist(username)
+    browser = webdriver.Chrome()
+    try:
+        url = "https://www.gog.com/u/" + username + "/wishlist"
+        browser.get(url)
+    except TimeoutError:
+        raise
+    BAE = BrowserActionExecutor(browser, username)
+    BAE.download_avatar()
+    BAE.retrieve_wishlist()
     os.remove(username + '.html')
 
 
