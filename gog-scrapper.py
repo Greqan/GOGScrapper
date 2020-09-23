@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import json
+from itertools import tee
 from urllib import request
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -9,6 +10,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from retrying import retry
+from math import floor
+
+
+def roundDown(n, d=2):
+    d = int('1' + ('0' * d))
+    return floor(n * d) / d
 
 
 def retry_if_timeout_error(exception):
@@ -18,7 +25,7 @@ def retry_if_timeout_error(exception):
 
 def next_price(soup):
     for price in soup.body.find_all('span', class_="product-state__price"):
-        yield price.text
+        yield roundDown(float(price.text))
 
 
 def append_to_json(username, single_site_table):
@@ -33,6 +40,8 @@ class BrowserActionExecutor:
         self.browser = browser
         self.browser.set_page_load_timeout(15)
         self.username = username
+        self.generator_prices = None
+
 
     def wishlist_exist(self):
         html = self.browser.page_source
@@ -52,9 +61,16 @@ class BrowserActionExecutor:
 
     def retrieve_single_table(self, soup):
         records = soup.body.find_all('span', class_="product-title__text")
-        records_dict = {records.pop(0).text: price for price in next_price(soup)}
-        print(records_dict)
+        generator = next_price(soup)
+        generator, self.generator_prices = tee(generator)
+        records_dict = {records.pop(0).text: price for price in generator}
         return records_dict
+
+    def sum_wishlist_value(self):
+        total_sum = 0
+        for price in self.generator_prices:
+            total_sum = total_sum + price
+        return total_sum
 
     def get_soup_from_source(self):
             html = self.browser.page_source
@@ -126,6 +142,7 @@ def main():
     BAE = BrowserActionExecutor(browser, username)
     BAE.download_avatar()
     BAE.retrieve_wishlist()
+    print(roundDown(BAE.sum_wishlist_value()))
     os.remove(username + '.html')
 
 
