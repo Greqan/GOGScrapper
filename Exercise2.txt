@@ -1,0 +1,12 @@
+A)Cloud synchronization after opening the game feature check
+	1)Host -> Generate some save files - in this case JNxSAVE.y, where x is number of corresponding part of the title and y, is game slot (1 of 6)
+	2)VM no.1 -> copy save files from host
+	3)VM no.1 -> run the game
+	4)VM no.2 -> remove whole content of <game_installation_folder>/cloud_saves
+	5)VM no.2 -> run the game
+	6)VM no.2 -> check if now there are new files in <game_installation_folder>/cloud_saves
+	7)VM no.2 -> if yes go to step 8, else FAIL TC 
+	8)Host -> retrieve save files from VM no.2
+	9)Host -> make byte comparison between each file downloaded from VM no.2 and corresponding VM no.1 file.
+	10)Host -> if yes PASS TC, if no, FAIL TC
+	
