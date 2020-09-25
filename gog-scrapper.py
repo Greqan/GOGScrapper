@@ -19,7 +19,6 @@ def roundDown(n, d=2):
 
 
 def retry_if_timeout_error(exception):
-    """Return True if we should retry (in this case when it's an IOError), False otherwise"""
     return isinstance(exception, TimeoutError)
 
 
@@ -41,7 +40,6 @@ class BrowserActionExecutor:
         self.browser.set_page_load_timeout(15)
         self.username = username
         self.generator_prices = None
-
 
     def wishlist_exist(self):
         html = self.browser.page_source
@@ -79,7 +77,7 @@ class BrowserActionExecutor:
 
     def handle_more_than_one_page(self, pages_total):
         css_selector_right_arrow = "span[hook-test='nextListPage']"
-        for i in range(0, pages_total):
+        for i in range(pages_total):
             soup = self.get_soup_from_source()
             WebDriverWait(self.browser, 15).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, css_selector_right_arrow))

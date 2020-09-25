@@ -1,4 +1,5 @@
-A)Cloud synchronization after opening the game feature check
+A)Cloud synchronization after opening the game, feature check
+	0)Host -> Make sure there are no saves on the cloud
 	1)Host -> Generate some save files - in this case JNxSAVE.y, where x is number of corresponding part of the title and y, is game slot (1 of 6)
 	2)VM no.1 -> copy save files from host
 	3)VM no.1 -> run the game
@@ -9,4 +10,67 @@ A)Cloud synchronization after opening the game feature check
 	8)Host -> retrieve save files from VM no.2
 	9)Host -> make byte comparison between each file downloaded from VM no.2 and corresponding VM no.1 file.
 	10)Host -> if yes PASS TC, if no, FAIL TC
+
+B)Cloud synchronization after closing the game, feature check
+	1)Host -> Generate some save files - in this case JNxSAVE.y, where x is number of corresponding part of the title and y, is game slot (1 of 6)
+	2)VM no.1 -> run the game
+	3)VM no.1 -> replace content of <game_installation_folder>/cloud_saves, with host generated files
+	4)VM no.1 -> close the game
+	5)VM no.2 -> run the game
+	6)Host -> make byte comparison between each file downloaded from VM no.2 and corresponding generated on host file
+	7)Host -> if yes PASS TC, if no, FAIL TC
+
+C)Synchronization after repairing/verifing game, feature check
+	1)Host -> Generate some save files - in this case JNxSAVE.y, where x is number of corresponding part of the title and y, is game slot (1 of 6)
+	2)VM no.1 -> copy save files from host
+	3)VM no.2 -> remove whole content of <game_installation_folder>/cloud_saves
+	4)VM no.1 -> verify/repair the game
+	5)VM no.2 -> run the game
+	6)VM no.2 -> check if now there are new files in <game_installation_folder>/cloud_saves
+	7)VM no.2 -> if yes go to step 8, else FAIL TC 
+	8)Host -> retrieve save files from VM no.2
+	9)Host -> make byte comparison between each file downloaded from VM no.2 and corresponding VM no.1 file.
+	10)Host -> if yes PASS TC, if no, FAIL TC
+
+D)Synchronization after game installation check, feature check
+	1)Make sure that there are saves stored on the cloud (for example execute this script after A TC)
+	2)Host -> install the game
+	3)Host -> check if now there are new files in <game_installation_folder>/cloud_saves
+	4)Host -> if yes PASS TC, if no, FAIL TC
+
+E)Synchronization after game deinstalation check, feature check
+	1)Host -> Generate some save files - in this case JNxSAVE.y, where x is number of corresponding part of the title and y, is game slot (1 of 6)
+	2)VM no.1 -> copy save files from host
+	3)VM no.1 -> uninstall the game
+	4)VM no.2 -> check if save files have changed, if no FAIL TC
+	5)Host -> make byte comparison between each file downloaded from VM no.2 and corresponding VM no.1 file.
+	6)Host -> if yes PASS TC, if no, FAIL TC
 	
+F)Removing saves from cloud storage, server behavior check
+	1)Make sure that there are saves stored on the cloud (for example execute this script after A TC)
+	2)Host -> run the game
+	3)Host -> remove whole content of <game_installation_folder>/cloud_saves
+	4)Host -> close the game
+	5)Host -> run the game
+	6)Host -> check if now there are save files in <game_installation_folder>/cloud_saves 
+	7)Host -> if no PASS TC, if yes, FAIL TC
+
+G)Overload Cloud Server with saves, server behavior check
+	1)Host -> Generate some save file above 200 MB - in this case ie. JILL1.CFG
+	2)Host -> run the game
+	3)Host -> wait till server error
+	4)if yes, TC PASS, if no, FAIL TC
+
+H)Try Boundary Sizes of saves, server behavior check
+	1)Host -> Generate some save file exactly 200 MB in size - in this case ie. JILL1.CFG
+	2)Host -> run the game
+	3)Host -> if no synchronization with cloud, FAIL TC
+	4)Host -> Generate some save file exactly 0 MB in size - in this case ie. JILL1.CFG
+	5)Host -> if no synchronization with cloud, FAIL TC
+	6)Host -> PASS TC
+
+
+In my opinion it is possible and definately worth, implementing such Test Cases, as most of them operate on files and simple user interaction.
+Inside TCs as it can be seen, I've already proposed some kind of automation, based on VMs pipeline, and for writing BD Tests, Robot Framework can be used.
+Nevertheless, I'm fully aware that probably in terms of using Selenium, creating such isolated architecture may not be the greatest solution.
+I've decided to refer to it, as it is the most familiar for me. In real implementation however, I would rather think about sth more lightweight - Docker Containers.
