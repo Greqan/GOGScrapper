@@ -32,6 +32,17 @@ def append_to_json(username, single_site_table):
         json.dump(single_site_table, fresult, indent=4)
 
 
+def sum_wishlist_value(username):
+    total_sum = 0
+    with open(username + "_wishlist.json") as json_file:
+        for record in json_file:
+            price_tag = re.findall(r"\": \d*.\d+,", str(record))
+            if len(price_tag) == 1:
+                price = re.findall(r"\d+.\d+", str(price_tag))[0]
+                total_sum = total_sum + roundDown(float(price))
+    return roundDown(total_sum)
+
+
 class BrowserActionExecutor:
     username = ""
 
@@ -39,7 +50,6 @@ class BrowserActionExecutor:
         self.browser = browser
         self.browser.set_page_load_timeout(15)
         self.username = username
-        self.generator_prices = None
 
     def wishlist_exist(self):
         html = self.browser.page_source
@@ -60,15 +70,8 @@ class BrowserActionExecutor:
     def retrieve_single_table(self, soup):
         records = soup.body.find_all('span', class_="product-title__text")
         generator = next_price(soup)
-        generator, self.generator_prices = tee(generator)
         records_dict = {records.pop(0).text: price for price in generator}
         return records_dict
-
-    def sum_wishlist_value(self):
-        total_sum = 0
-        for price in self.generator_prices:
-            total_sum = total_sum + price
-        return total_sum
 
     def get_soup_from_source(self):
             html = self.browser.page_source
@@ -140,8 +143,9 @@ def main():
     BAE = BrowserActionExecutor(browser, username)
     BAE.download_avatar()
     BAE.retrieve_wishlist()
-    print(roundDown(BAE.sum_wishlist_value()))
+    if BAE.wishlist_exist():
+        print(sum_wishlist_value(username))
     os.remove(username + '.html')
-
+    browser.close()
 
 main()
